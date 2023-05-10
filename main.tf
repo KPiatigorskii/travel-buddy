@@ -16,6 +16,18 @@ resource "aws_instance" "travel-buddy-instance" {
   associate_public_ip_address = true
   key_name =  "${aws_key_pair.deployer-key.key_name}"
 
+  provisioner "remote-exec" { 
+    connection {
+      host = self.public_ip
+      type     = "ssh"
+      user     = "ec2-user"
+      private_key = "${file("~/.ssh/id_rsa")}"
+    }
+    inline = [
+      "touch /home/ec2-user/install.sh"
+    ]
+  }
+
   provisioner "file" {
     connection {
       host = self.public_ip
@@ -35,8 +47,21 @@ resource "aws_instance" "travel-buddy-instance" {
       private_key = "${file("~/.ssh/id_rsa")}"
     }
     inline = [
-      "chmod +x /home/ec2-user/script.sh",
-      "./home/ec2-user/install.sh"
+      "chmod +x /home/ec2-user/install.sh",
+      "source /home/ec2-user/install.sh"
+    ]
+  }
+
+  provisioner "remote-exec" { 
+    connection {
+      host = self.public_ip
+      type     = "ssh"
+      user     = "ec2-user"
+      private_key = "${file("~/.ssh/id_rsa")}"
+    }
+    inline = [
+      "chmod +x /home/ec2-user/travel-buddy/start.sh",
+      "source /home/ec2-user/travel-buddy/start.sh"
     ]
   }
 }
@@ -66,6 +91,11 @@ resource "aws_subnet" "travel-buddy-subnet" {
     }
 }
 
+resource "aws_route_table_association" "travel-buddy-route-ta" {
+  route_table_id = aws_route_table.travel-buddy-route-table.id
+  subnet_id = aws_subnet.travel-buddy-subnet.id
+}
+
 resource "aws_internet_gateway" "travel-buddy-igw" {
   vpc_id = aws_vpc.travel-buddy-vpc.id
   tags = {
@@ -83,7 +113,7 @@ resource "aws_route_table" "travel-buddy-route-table" {
     Name: "${var.env_prefix}-rtb"
   }
 }
-
+# 5000
 resource "aws_route_table_association" "travel-buddy-rtba" {
   subnet_id = aws_subnet.travel-buddy-subnet.id
   route_table_id = aws_route_table.travel-buddy-route-table.id
@@ -98,8 +128,14 @@ resource "aws_security_group" "travel-buddy-sgroup" {
 
 resource "aws_vpc_security_group_egress_rule" "egress-rule" {
     security_group_id = aws_security_group.travel-buddy-sgroup.id
-    from_port = 0
-    to_port = 0
+    ip_protocol = -1
+    cidr_ipv4 = "0.0.0.0/0"
+}
+
+resource "aws_vpc_security_group_ingress_rule" "travel-buddy-rule" {
+    security_group_id = aws_security_group.travel-buddy-sgroup.id
+    from_port = 5000
+    to_port = 5000
     ip_protocol = "tcp"
     cidr_ipv4 = "0.0.0.0/0"
 }
